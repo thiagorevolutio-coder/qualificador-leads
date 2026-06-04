@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qualificador de Leads</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 1.6rem;
+    color: #7dd3fc;
+    margin-bottom: 18px;
+    letter-spacing: 1px;
+  }
+
+  /* TOOLBAR */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    background: #1e293b;
+    padding: 12px 16px;
+    border-radius: 10px;
+  }
+
+  .toolbar input[type="text"] {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  .toolbar input[type="text"]:focus { border-color: #7dd3fc; }
+  .toolbar input[type="text"]::placeholder { color: #64748b; }
+
+  /* FILTRO MULTI-BAIRRO */
+  .bairro-filter {
+    position: relative;
+  }
+
+  .bairro-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    cursor: pointer;
+    min-width: 200px;
+    user-select: none;
+    transition: border-color 0.15s;
+    white-space: nowrap;
+  }
+  .bairro-trigger:hover { border-color: #7dd3fc; }
+  .bairro-trigger.open  { border-color: #7dd3fc; }
+
+  .bairro-trigger-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .bairro-arrow { font-size: 0.7rem; color: #64748b; transition: transform 0.2s; }
+  .bairro-trigger.open .bairro-arrow { transform: rotate(180deg); }
+
+  .bairro-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 200;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px;
+    min-width: 240px;
+    max-height: 320px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .bairro-panel.open { display: block; }
+
+  .bairro-panel-btns {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #334155;
+  }
+  .bairro-panel-btns button {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .bairro-panel-btns button:hover { background: #334155; color: #e2e8f0; }
+
+  .bairro-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .bairro-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+  }
+  .bairro-item:hover { background: #0f172a; }
+  .bairro-item.checked { color: #7dd3fc; }
+
+  .bairro-item input[type="checkbox"] {
+    accent-color: #7dd3fc;
+    width: 14px; height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .bairro-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .bairro-tag {
+    background: #1d4ed8;
+    color: #e2e8f0;
+    border-radius: 20px;
+    padding: 2px 10px 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: grab;
+    transition: background 0.15s, opacity 0.2s;
+    user-select: none;
+    touch-action: none;
+  }
+  .bairro-tag:hover { background: #2563eb; }
+  .bairro-tag::before { content: '⠿'; font-size: 0.8rem; opacity: 0.55; }
+  .bairro-tag::after  { content: '×'; font-size: 0.9rem; opacity: 0.7; }
+  .bairro-tag:hover::after { opacity: 1; color: #fca5a5; }
+  .bairro-tag.dragging-tag { opacity: 0.22; }
+
+  .tag-drag-clone {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.93;
+    transform: rotate(-2deg) scale(1.1);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+    cursor: grabbing !important;
+    transition: none !important;
+    white-space: nowrap;
+  }
+
+  .tag-insert-line {
+    position: fixed;
+    width: 3px;
+    border-radius: 2px;
+    background: #7dd3fc;
+    box-shadow: 0 0 10px rgba(125,211,252,0.9);
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+  }
+
+  .btn {
+    padding: 14px 26px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-size: 1.05rem;
+    font-weight: 600;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+    min-height: 52px;
+  }
+  .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+
+  .btn-import  { background: #0ea5e9; color: #fff; }
+  .btn-export  { background: #22c55e; color: #fff; }
+  .btn-clear   { background: #ef4444; color: #fff; }
+
+  #file-input { display: none; }
+
+  /* KANBAN */
+  .kanban {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .column {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 14px;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .column-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .col-bruta  .column-title { color: #fb923c; }
+  .col-quali  .column-title { color: #4ade80; }
+
+  .counter {
+    background: #0f172a;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #94a3b8;
+  }
+
+  .drop-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 100px;
+    padding: 4px;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+  .drop-zone.drag-over {
+    background: rgba(125, 211, 252, 0.08);
+    outline: 2px dashed #7dd3fc;
+  }
+
+  /* CARD */
+  .card {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 9px;
+    padding: 10px 12px;
+    cursor: grab;
+    transition: box-shadow 0.15s, border-color 0.15s, opacity 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .card:hover { border-color: #7dd3fc; box-shadow: 0 2px 12px rgba(125,211,252,0.12); }
+  .card.dragging { opacity: 0.4; cursor: grabbing; }
+  .card.hidden { display: none; }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .card-nome {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    line-height: 1.3;
+    flex: 1;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .card-bairro {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+
+  .btn-icon {
+    border: none;
+    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    cursor: pointer;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .btn-icon:hover { transform: scale(1.12); }
+
+  .btn-maps  { background: #1d4ed8; }
+  .btn-trash { background: #7f1d1d; }
+  .btn-copy  { background: #1e3a2f; color: #4ade80; font-size: 1rem; }
+  .btn-copy:active { background: #166534; }
+
+  .card-link-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .card-link-url {
+    font-size: 0.7rem;
+    color: #38bdf8;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    max-width: 180px;
+  }
+  .card-link-url:hover { text-decoration: underline; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    color: #334155;
+    font-size: 0.82rem;
+    padding: 30px 10px;
+    pointer-events: none;
+  }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* OVERLAY para fechar painel no mobile */
+  #bairro-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: rgba(0,0,0,0.45);
+  }
+  #bairro-overlay.open { display: block; }
+
+  /* ABAS MOBILE */
+  .mobile-tabs {
+    display: none;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mobile-tab {
+    padding: 12px 8px;
+    border-radius: 10px;
+    border: 2px solid #334155;
+    background: #1e293b;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .mobile-tab.active-bruta { border-color: #fb923c; color: #fb923c; background: rgba(251,146,60,0.08); }
+  .mobile-tab.active-quali { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.08); }
+  .mobile-tab .tab-count {
+    background: #0f172a;
+    border-radius: 20px;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+  }
+
+  .btn-export-mobile { display: none; }
+
+  @media (max-width: 640px) {
+    body { padding: 12px; }
+    h1 { font-size: 1.3rem; margin-bottom: 12px; }
+
+    .toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .toolbar input[type="text"] {
+      min-width: unset;
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 1rem;
+    }
+    .bairro-filter { width: 100%; }
+    .bairro-trigger {
+      width: 100%;
+      min-width: unset;
+      padding: 10px 14px;
+      font-size: 1rem;
+    }
+
+    /* Painel sobe de baixo como bottom sheet */
+    .bairro-panel {
+      position: fixed;
+      top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      max-height: 60vh;
+      border-radius: 16px 16px 0 0;
+      z-index: 300;
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 1rem;
+      min-height: 50px;
+    }
+    .btn-icon { width: 52px; height: 52px; font-size: 1.4rem; }
+
+    /* Abas visíveis */
+    .mobile-tabs { display: grid; }
+    .kanban { grid-template-columns: 1fr; gap: 0; }
+    .column { display: none; }
+    .column.tab-active { display: flex; }
+    .btn-export-kanban { display: none; }
+    .btn-export-mobile { display: block !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Overlay para fechar painel de bairros no mobile -->
+<div id="bairro-overlay" onclick="fecharBairroPanel()"></div>
+
+<h1>⚡ Qualificador de Leads</h1>
+
+<!-- Botão exportar mobile -->
+<button class="btn btn-export btn-export-mobile" onclick="exportarQualificados()" style="margin-bottom:10px;">⬇ Exportar Qualificados</button>
+
+<!-- Abas mobile -->
+<div class="mobile-tabs">
+  <button class="mobile-tab active-bruta" id="tab-bruta" onclick="trocarAba('bruta')">
+    📋 Lista Bruta <span class="tab-count" id="tab-count-bruta">0</span>
+  </button>
+  <button class="mobile-tab" id="tab-quali" onclick="trocarAba('quali')">
+    ✅ Qualificados <span class="tab-count" id="tab-count-quali">0</span>
+  </button>
+</div>
+
+<div class="toolbar">
+  <div class="bairro-filter" id="bairro-filter">
+    <div class="bairro-trigger" id="bairro-trigger" onclick="toggleBairroPanel()">
+      <span class="bairro-trigger-label" id="bairro-trigger-label">🏘 Todos os bairros</span>
+      <span class="bairro-arrow">▾</span>
+    </div>
+    <div class="bairro-panel" id="bairro-panel">
+      <div class="bairro-panel-btns">
+        <button onclick="selecionarTodosBairros()">✅ Selecionar todos</button>
+        <button onclick="limparBairros()">✖ Limpar</button>
+      </div>
+      <div class="bairro-list" id="bairro-list"></div>
+    </div>
+  </div>
+  <input type="text" id="filtro-nome" placeholder="🔍 Buscar por nome...">
+  <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📂 Importar Excel / CSV</button>
+  <input type="file" id="file-input" accept=".xlsx,.xls,.csv" onchange="importarArquivo(event)">
+  <button class="btn btn-clear" onclick="limparTudo()">🗑 Limpar tudo</button>
+</div>
+<!-- Tags dos bairros selecionados -->
+<div class="bairro-tags" id="bairro-tags"></div>
+
+<div class="kanban">
+  <!-- LISTA BRUTA -->
+  <div class="column col-bruta tab-active" id="col-bruta">
+    <div class="column-header">
+      <span class="column-title">📋 Lista Bruta</span>
+      <span class="counter" id="count-bruta">0</span>
+    </div>
+    <div class="drop-zone" id="zone-bruta"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'bruta')">
+      <div class="empty" id="empty-bruta">Importe um arquivo para começar</div>
+    </div>
+  </div>
+
+  <!-- QUALIFICADOS -->
+  <div class="column col-quali" id="col-quali">
+    <div class="column-header">
+      <span class="column-title">✅ Qualificados</span>
+      <span class="counter" id="count-quali">0</span>
+      <button class="btn btn-export btn-export-kanban" onclick="exportarQualificados()">⬇ Exportar Excel</button>
+    </div>
+    <div class="drop-zone" id="zone-quali"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'quali')">
+      <div class="empty" id="empty-quali">Arraste leads qualificados aqui</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Estado ──────────────────────────────────────────────────────────────────
+let leads = [];   // { id, nome, bairro, maps, coluna }
+let dragId = null;
+let bairrosSelecionados = new Set();
+let bairrosOrdem = [];        // ordem das tags selecionadas (define ordem dos cards)
+let tagDrag = null;           // estado ativo do drag de tags
+let tagDragHappened = false;  // suprime click após drag
+let historicoExclusoes = [];  // pilha de snapshots para Ctrl+Z (máx 20)
+
+const STORAGE_KEY = 'qualificador_leads_v1';
+
+// ── Init ────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  carregarStorage();
+  renderizar();
+  document.getElementById('filtro-nome').addEventListener('input', aplicarFiltro);
+
+  // Ctrl+Z para desfazer exclusão
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      const ativo = document.activeElement;
+      const editando = ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA');
+      if (!editando) { e.preventDefault(); desfazer(); }
+    }
+  });
+
+  // Handlers globais para drag de tags (pointer events — mouse + touch)
+  document.addEventListener('pointermove', onTagPointerMove, { passive: false });
+  document.addEventListener('pointerup',   onTagPointerUp);
+  document.addEventListener('pointercancel', () => { if (tagDrag) finalizarTagDrag(); });
+
+  // Fecha painel ao clicar fora
+  document.addEventListener('click', e => {
+    const filter = document.getElementById('bairro-filter');
+    if (!filter.contains(e.target) && e.target.id !== 'bairro-overlay') {
+      fecharBairroPanel();
+    }
+  });
+});
+
+// ── Storage ─────────────────────────────────────────────────────────────────
+function salvarStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+}
+
+function carregarStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) leads = JSON.parse(raw);
+  } catch(e) { leads = []; }
+}
+
+// ── Importar ─────────────────────────────────────────────────────────────────
+function importarArquivo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  const isCSV  = file.name.toLowerCase().endsWith('.csv');
+
+  reader.onload = function(ev) {
+    try {
+      let wb;
+      if (isCSV) {
+        // CSV: detecta separador (vírgula ou ponto-e-vírgula) e encoding
+        const text = ev.target.result;
+        const sep  = text.indexOf(';') !== -1 ? ';' : ',';
+        wb = XLSX.read(text, { type: 'string', FS: sep });
+      } else {
+        const data = new Uint8Array(ev.target.result);
+        wb = XLSX.read(data, { type: 'array' });
+      }
+
+      let novos = 0;
+      wb.SheetNames.forEach(sheetName => {
+        const ws   = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        rows.forEach(row => {
+          const nome  = encontrarCol(row, ['nome']) || '';
+          const bairro= encontrarCol(row, ['bairro']) || '';
+          const maps  = encontrarCol(row, ['link maps','link_maps','maps','linkmap','link']) || '';
+          if (!nome.trim()) return;
+
+          const jaExiste = leads.some(l => l.nome === nome && l.bairro === bairro);
+          if (jaExiste) return;
+
+          leads.push({ id: uid(), nome, bairro, maps, coluna: 'bruta' });
+          novos++;
+        });
+      });
+
+      salvarStorage();
+      renderizar();
+      toast(`✅ ${novos} leads importados`);
+    } catch(err) {
+      toast('❌ Erro ao ler arquivo: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  if (isCSV) {
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function encontrarCol(row, possiveis) {
+  const keys = Object.keys(row);
+  for (const p of possiveis) {
+    const found = keys.find(k => k.trim().toLowerCase().includes(p));
+    if (found) return String(row[found]);
+  }
+  return '';
+}
+
+// ── Renderizar ───────────────────────────────────────────────────────────────
+function renderizar() {
+  const zoneBruta = document.getElementById('zone-bruta');
+  const zoneQuali = document.getElementById('zone-quali');
+
+  // Remove cards (não remove empty)
+  zoneBruta.querySelectorAll('.card').forEach(c => c.remove());
+  zoneQuali.querySelectorAll('.card').forEach(c => c.remove());
+
+  const bruta = leads.filter(l => l.coluna === 'bruta');
+  const quali  = leads.filter(l => l.coluna === 'quali');
+
+  bruta.forEach(l => zoneBruta.appendChild(criarCard(l)));
+  quali.forEach(l  => zoneQuali.appendChild(criarCard(l)));
+
+  document.getElementById('empty-bruta').style.display = bruta.length ? 'none' : 'block';
+  document.getElementById('empty-quali').style.display = quali.length  ? 'none' : 'block';
+  document.getElementById('count-bruta').textContent = bruta.length;
+  document.getElementById('count-quali').textContent  = quali.length;
+
+  atualizarDropdownBairros();
+  reordenarCards();
+  aplicarFiltro();
+  atualizarContadoresAbas();
+}
+
+function atualizarDropdownBairros() {
+  const bairros = [...new Set(leads.map(l => l.bairro).filter(Boolean))].sort();
+  const lista = document.getElementById('bairro-list');
+  lista.innerHTML = '';
+
+  // Remove bairros selecionados que não existem mais
+  for (const b of bairrosSelecionados) {
+    if (!bairros.includes(b)) {
+      bairrosSelecionados.delete(b);
+      bairrosOrdem = bairrosOrdem.filter(x => x !== b);
+    }
+  }
+
+  bairros.forEach(b => {
+    const item = document.createElement('label');
+    item.className = 'bairro-item' + (bairrosSelecionados.has(b) ? ' checked' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = b;
+    cb.checked = bairrosSelecionados.has(b);
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        bairrosSelecionados.add(b);
+        if (!bairrosOrdem.includes(b)) bairrosOrdem.push(b);
+      } else {
+        bairrosSelecionados.delete(b);
+        bairrosOrdem = bairrosOrdem.filter(x => x !== b);
+      }
+      item.classList.toggle('checked', cb.checked);
+      atualizarTagsBairros();
+      reordenarCards();
+      aplicarFiltro();
+    });
+    item.appendChild(cb);
+    item.appendChild(document.createTextNode(b));
+    lista.appendChild(item);
+  });
+
+  atualizarTagsBairros();
+}
+
+function atualizarTagsBairros() {
+  const container = document.getElementById('bairro-tags');
+  container.innerHTML = '';
+  const label = document.getElementById('bairro-trigger-label');
+
+  if (bairrosSelecionados.size === 0) {
+    label.textContent = '🏘 Todos os bairros';
+    return;
+  }
+
+  const total = [...new Set(leads.map(l => l.bairro).filter(Boolean))].length;
+  label.textContent = bairrosSelecionados.size === total
+    ? `🏘 Todos (${total})`
+    : `🏘 ${bairrosSelecionados.size} bairro${bairrosSelecionados.size > 1 ? 's' : ''}`;
+
+  bairrosOrdem.forEach(b => {
+    const tag = document.createElement('span');
+    tag.className = 'bairro-tag';
+    tag.textContent = b;
+    tag.dataset.bairro = b;
+    tag.title = 'Arraste para reordenar · Clique para remover';
+
+    tag.onclick = () => {
+      if (tagDragHappened) return;
+      bairrosSelecionados.delete(b);
+      bairrosOrdem = bairrosOrdem.filter(x => x !== b);
+      const cb = document.querySelector(`#bairro-list input[value="${CSS.escape(b)}"]`);
+      if (cb) { cb.checked = false; cb.closest('.bairro-item').classList.remove('checked'); }
+      atualizarTagsBairros();
+      reordenarCards();
+      aplicarFiltro();
+    };
+
+    initTagDrag(tag, b);
+    container.appendChild(tag);
+  });
+}
+
+// ── Abas Mobile ──────────────────────────────────────────────────────────────
+function trocarAba(aba) {
+  document.getElementById('col-bruta').classList.toggle('tab-active', aba === 'bruta');
+  document.getElementById('col-quali').classList.toggle('tab-active', aba === 'quali');
+  document.getElementById('tab-bruta').className = 'mobile-tab' + (aba === 'bruta' ? ' active-bruta' : '');
+  document.getElementById('tab-quali').className = 'mobile-tab' + (aba === 'quali' ? ' active-quali' : '');
+}
+
+function atualizarContadoresAbas() {
+  const tcb = document.getElementById('tab-count-bruta');
+  const tcq = document.getElementById('tab-count-quali');
+  if (tcb) tcb.textContent = leads.filter(l => l.coluna === 'bruta').length;
+  if (tcq) tcq.textContent = leads.filter(l => l.coluna === 'quali').length;
+}
+
+function toggleBairroPanel() {
+  const trigger = document.getElementById('bairro-trigger');
+  const panel   = document.getElementById('bairro-panel');
+  const overlay = document.getElementById('bairro-overlay');
+  const open    = panel.classList.toggle('open');
+  trigger.classList.toggle('open', open);
+  overlay.classList.toggle('open', open);
+}
+
+function fecharBairroPanel() {
+  document.getElementById('bairro-panel').classList.remove('open');
+  document.getElementById('bairro-trigger').classList.remove('open');
+  document.getElementById('bairro-overlay').classList.remove('open');
+}
+
+function selecionarTodosBairros() {
+  document.querySelectorAll('#bairro-list input[type="checkbox"]').forEach(cb => {
+    if (!bairrosSelecionados.has(cb.value)) bairrosOrdem.push(cb.value);
+    cb.checked = true;
+    bairrosSelecionados.add(cb.value);
+    cb.closest('.bairro-item').classList.add('checked');
+  });
+  atualizarTagsBairros();
+  reordenarCards();
+  aplicarFiltro();
+}
+
+function limparBairros() {
+  bairrosSelecionados.clear();
+  bairrosOrdem = [];
+  document.querySelectorAll('#bairro-list input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.bairro-item').classList.remove('checked');
+  });
+  atualizarTagsBairros();
+  reordenarCards();
+  aplicarFiltro();
+}
+
+function criarCard(lead) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.id = lead.id;
+  card.draggable = true;
+
+  card.addEventListener('dragstart', onDragStart);
+  card.addEventListener('dragend',   onDragEnd);
+
+  // Toque longo (600ms) move o card para a outra coluna no mobile
+  let tapTimer;
+  card.addEventListener('touchstart', (e) => {
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    tapTimer = setTimeout(() => {
+      const lead = leads.find(l => l.id === card.dataset.id);
+      if (!lead) return;
+      const destino = lead.coluna === 'bruta' ? 'quali' : 'bruta';
+      lead.coluna = destino;
+      salvarStorage();
+      renderizar();
+      trocarAba(destino);
+      toast(destino === 'quali' ? '✅ Movido para Qualificados' : '↩ Movido para Lista Bruta');
+    }, 600);
+  }, { passive: true });
+  card.addEventListener('touchend',  () => clearTimeout(tapTimer));
+  card.addEventListener('touchmove', () => clearTimeout(tapTimer), { passive: true });
+
+  const mapsBtn = lead.maps
+    ? `<button class="btn-icon btn-maps" title="Abrir no Maps" onclick="abrirMaps('${encodeURIComponent(lead.maps)}')">📍</button>`
+    : `<button class="btn-icon btn-maps" title="Sem link" disabled style="opacity:0.3">📍</button>`;
+
+  const linkRow = lead.maps ? `
+    <div class="card-link-row">
+      <a class="card-link-url" href="${esc(lead.maps)}" target="_blank" title="${esc(lead.maps)}">${esc(lead.maps)}</a>
+      <button class="btn-icon btn-copy" style="width:32px;height:32px;font-size:0.85rem;" title="Copiar link" onclick="copiarTexto('${encodeURIComponent(lead.maps)}', 'Link copiado!')">🔗</button>
+    </div>` : '';
+
+  card.innerHTML = `
+    <div class="card-top">
+      <span class="card-nome">${esc(lead.nome)}</span>
+      <div class="card-actions">
+        <button class="btn-icon btn-copy" style="width:36px;height:36px;font-size:0.85rem;" title="Copiar nome" onclick="copiarTexto('${encodeURIComponent(lead.nome)}', 'Nome copiado!')">📋</button>
+        ${mapsBtn}
+        <button class="btn-icon btn-trash" title="Arquivar" onclick="arquivar('${lead.id}')">🗑️</button>
+      </div>
+    </div>
+    <span class="card-bairro">📍 ${esc(lead.bairro)}</span>
+    ${linkRow}
+  `;
+  return card;
+}
+
+// ── Ações ────────────────────────────────────────────────────────────────────
+function abrirMaps(encodedUrl) {
+  window.open(decodeURIComponent(encodedUrl), '_blank');
+}
+
+function copiarTexto(encodedTexto, msg) {
+  const texto = decodeURIComponent(encodedTexto);
+  navigator.clipboard.writeText(texto).then(() => toast('📋 ' + msg)).catch(() => {
+    // fallback para mobile que não suporta clipboard API
+    const el = document.createElement('textarea');
+    el.value = texto;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    toast('📋 ' + msg);
+  });
+}
+
+function arquivar(id) {
+  historicoExclusoes.push(JSON.parse(JSON.stringify(leads)));
+  if (historicoExclusoes.length > 20) historicoExclusoes.shift();
+  leads = leads.filter(l => l.id !== id);
+  salvarStorage();
+  renderizar();
+  toast('🗑 Lead removido — Ctrl+Z para desfazer');
+}
+
+function desfazer() {
+  if (!historicoExclusoes.length) { toast('Nada para desfazer'); return; }
+  leads = historicoExclusoes.pop();
+  salvarStorage();
+  renderizar();
+  toast('↩ Lead restaurado');
+}
+
+function limparTudo() {
+  if (!confirm('Limpar todos os leads? Essa ação não pode ser desfeita.')) return;
+  leads = [];
+  salvarStorage();
+  renderizar();
+  toast('🗑 Todos os leads removidos');
+}
+
+// ── Exportar ─────────────────────────────────────────────────────────────────
+async function exportarQualificados() {
+  const quali = leads.filter(l => l.coluna === 'quali');
+  if (!quali.length) { toast('Nenhum lead qualificado para exportar'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const wsData = [['Nome', 'Bairro', 'Link Maps']];
+  quali.forEach(l => wsData.push([l.nome, l.bairro, l.maps || '']));
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Largura das colunas
+  ws['!cols'] = [{ wch: 45 }, { wch: 22 }, { wch: 55 }];
+
+  // Cabeçalho em negrito
+  ['A1','B1','C1'].forEach(ref => {
+    if (!ws[ref]) return;
+    ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: '1E3A5F' } }, alignment: { horizontal: 'center' } };
+  });
+
+  // Links clicáveis na coluna Link Maps (coluna C, linhas 2+)
+  quali.forEach((l, i) => {
+    if (!l.maps) return;
+    const ref = `C${i + 2}`;
+    ws[ref] = { t: 's', v: l.maps, l: { Target: l.maps, Tooltip: 'Abrir no Google Maps' } };
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Qualificados');
+
+  const date = new Date().toISOString().slice(0, 10);
+  const nomeArquivo = `leads_qualificados_${date}.xlsx`;
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: nomeArquivo,
+        types: [{ description: 'Planilha Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
+      });
+      const writable = await handle.createWritable();
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+      await writable.write(new Blob([buf], { type: 'application/octet-stream' }));
+      await writable.close();
+      toast(`✅ ${quali.length} leads salvos`);
+    } catch (err) {
+      if (err.name !== 'AbortError') toast('❌ Erro ao salvar: ' + err.message);
+    }
+  } else {
+    XLSX.writeFile(wb, nomeArquivo, { cellStyles: true });
+    toast(`⬇ ${quali.length} leads exportados`);
+  }
+}
+
+// ── Drag & Drop ──────────────────────────────────────────────────────────────
+function onDragStart(e) {
+  dragId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  dragId = null;
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onDrop(e, coluna) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragId) return;
+
+  const lead = leads.find(l => l.id === dragId);
+  if (lead && lead.coluna !== coluna) {
+    lead.coluna = coluna;
+    salvarStorage();
+    renderizar();
+  }
+}
+
+// ── Tag Drag & Drop (Pointer Events — mouse + touch) ──────────────────────────
+const TAG_DRAG_THRESHOLD = 5; // px mínimos para ativar o drag
+
+function initTagDrag(tag, b) {
+  tag.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
+    const rect = tag.getBoundingClientRect();
+    tagDrag = {
+      pointerId: e.pointerId,
+      bairro: b,
+      origEl: tag,
+      clone: null,
+      insertLine: null,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      insertIdx: bairrosOrdem.indexOf(b),
+      active: false,
+    };
+  });
+}
+
+function onTagPointerMove(e) {
+  if (!tagDrag) return;
+
+  if (!tagDrag.active) {
+    if (Math.hypot(e.clientX - tagDrag.startX, e.clientY - tagDrag.startY) < TAG_DRAG_THRESHOLD) return;
+
+    // Ativar drag
+    tagDrag.active = true;
+    tagDragHappened = true;
+    tagDrag.origEl.setPointerCapture(tagDrag.pointerId);
+
+    const rect = tagDrag.origEl.getBoundingClientRect();
+
+    const clone = tagDrag.origEl.cloneNode(true);
+    clone.className = 'bairro-tag tag-drag-clone';
+    clone.style.left  = rect.left  + 'px';
+    clone.style.top   = rect.top   + 'px';
+    clone.style.width = rect.width + 'px';
+    document.body.appendChild(clone);
+    tagDrag.clone = clone;
+
+    const line = document.createElement('div');
+    line.className = 'tag-insert-line';
+    document.body.appendChild(line);
+    tagDrag.insertLine = line;
+
+    tagDrag.origEl.classList.add('dragging-tag');
+  }
+
+  e.preventDefault();
+
+  tagDrag.clone.style.left = (e.clientX - tagDrag.offsetX) + 'px';
+  tagDrag.clone.style.top  = (e.clientY - tagDrag.offsetY) + 'px';
+
+  const { idx, tags } = getTagInsertInfo(e.clientX, e.clientY);
+  tagDrag.insertIdx = idx;
+  posicionarLinhaInsercao(tagDrag.insertLine, idx, tags);
+}
+
+function onTagPointerUp() {
+  if (!tagDrag) return;
+
+  if (tagDrag.active) {
+    const fromIdx = bairrosOrdem.indexOf(tagDrag.bairro);
+    if (fromIdx !== -1) {
+      const novo = [...bairrosOrdem];
+      novo.splice(fromIdx, 1);
+      novo.splice(tagDrag.insertIdx, 0, tagDrag.bairro);
+      if (novo.join('\0') !== bairrosOrdem.join('\0')) {
+        bairrosOrdem = novo;
+        atualizarTagsBairros();
+        reordenarCards();
+        aplicarFiltro();
+      }
+    }
+  }
+
+  finalizarTagDrag();
+}
+
+function finalizarTagDrag() {
+  if (!tagDrag) return;
+  if (tagDrag.clone) tagDrag.clone.remove();
+  if (tagDrag.insertLine) tagDrag.insertLine.remove();
+  if (tagDrag.origEl) {
+    tagDrag.origEl.classList.remove('dragging-tag');
+    try { tagDrag.origEl.releasePointerCapture(tagDrag.pointerId); } catch (_) {}
+  }
+  tagDrag = null;
+  requestAnimationFrame(() => { tagDragHappened = false; });
+}
+
+function getTagInsertInfo(clientX, clientY) {
+  const container = document.getElementById('bairro-tags');
+  const tags = [...container.querySelectorAll('.bairro-tag:not(.dragging-tag)')];
+  if (!tags.length) return { idx: 0, tags };
+
+  // Encontra a tag mais próxima do cursor (Y tem peso maior para flex-wrap)
+  let closestI = 0, closestDist = Infinity;
+  for (let i = 0; i < tags.length; i++) {
+    const r = tags[i].getBoundingClientRect();
+    const dist = Math.abs(clientY - (r.top + r.height / 2)) * 4
+               + Math.abs(clientX - (r.left + r.width  / 2));
+    if (dist < closestDist) { closestDist = dist; closestI = i; }
+  }
+
+  const r = tags[closestI].getBoundingClientRect();
+  const idx = clientX < r.left + r.width / 2 ? closestI : closestI + 1;
+  return { idx, tags };
+}
+
+function posicionarLinhaInsercao(line, insertIdx, tags) {
+  if (!tags.length) { line.style.display = 'none'; return; }
+
+  let x, y, h;
+  if (insertIdx <= 0) {
+    const r = tags[0].getBoundingClientRect();
+    x = r.left - 3; y = r.top; h = r.height;
+  } else if (insertIdx >= tags.length) {
+    const r = tags[tags.length - 1].getBoundingClientRect();
+    x = r.right + 1; y = r.top; h = r.height;
+  } else {
+    const rA = tags[insertIdx - 1].getBoundingClientRect();
+    const rB = tags[insertIdx].getBoundingClientRect();
+    if (Math.abs(rA.top - rB.top) < 10) {
+      // mesma linha — linha aparece no meio do gap
+      x = (rA.right + rB.left) / 2 - 1; y = rA.top; h = rA.height;
+    } else {
+      // quebrou linha — início da próxima linha
+      x = rB.left - 3; y = rB.top; h = rB.height;
+    }
+  }
+
+  line.style.left    = x + 'px';
+  line.style.top     = y + 'px';
+  line.style.height  = h + 'px';
+  line.style.display = 'block';
+}
+
+// ── Filtro ───────────────────────────────────────────────────────────────────
+function aplicarFiltro() {
+  const qNome = document.getElementById('filtro-nome').value.trim().toLowerCase();
+
+  document.querySelectorAll('.card').forEach(card => {
+    const id     = card.dataset.id;
+    const lead   = leads.find(l => l.id === id);
+    if (!lead) return;
+    const passaNome   = !qNome || lead.nome.toLowerCase().includes(qNome);
+    const passaBairro = bairrosSelecionados.size === 0 || bairrosSelecionados.has(lead.bairro);
+    card.classList.toggle('hidden', !passaNome || !passaBairro);
+  });
+
+  ['bruta','quali'].forEach(col => {
+    const zone    = document.getElementById('zone-' + col);
+    const visible = zone.querySelectorAll('.card:not(.hidden)').length;
+    document.getElementById('count-' + col).textContent = visible;
+    const tc = document.getElementById('tab-count-' + col);
+    if (tc) tc.textContent = visible;
+  });
+}
+
+// ── Reordenar cards por ordem de bairros ─────────────────────────────────────
+function reordenarCards() {
+  if (bairrosOrdem.length === 0) return;
+  ['bruta', 'quali'].forEach(col => {
+    const zone = document.getElementById('zone-' + col);
+    const cards = [...zone.querySelectorAll('.card')];
+    cards.sort((a, b) => {
+      const la = leads.find(l => l.id === a.dataset.id);
+      const lb = leads.find(l => l.id === b.dataset.id);
+      const ia = la ? bairrosOrdem.indexOf(la.bairro) : -1;
+      const ib = lb ? bairrosOrdem.indexOf(lb.bairro) : -1;
+      return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
+    });
+    cards.forEach(card => zone.appendChild(card));
+  });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
